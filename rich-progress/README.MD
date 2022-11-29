@@ -3,4 +3,4 @@
 - `requirements.txt` is NOT minimal
 - `LiveDownload` class is good for multithreaded downloading tasks
 
-[[/img/rich_example.png]]
+![Demonstration of a Downloader using LiveDownload class](/img/rich_example.png)
