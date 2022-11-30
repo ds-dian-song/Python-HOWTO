@@ -1,23 +1,16 @@
-import requests
-from requests.auth import HTTPBasicAuth
-from bs4 import BeautifulSoup
+#import requests
+#from requests.auth import HTTPBasicAuth
+#from bs4 import BeautifulSoup
 from time import perf_counter_ns, sleep
-from tqdm import tqdm
 import re
 import os
 from concurrent.futures import ThreadPoolExecutor
 from rich.progress import Progress, SpinnerColumn, DownloadColumn, TimeElapsedColumn, MofNCompleteColumn, TransferSpeedColumn
-from rich import pretty
 from rich.console import Console
-import logging
-from rich.logging import RichHandler
-from threading import RLock
 from rich.console import Group
 from rich.live import Live
-from typing import Optional
+from threading import RLock
 from random import randint
-from typing import IO, Any, Callable, List, Optional, TextIO, Type, cast
-from types import TracebackType
 
 StdColors = [
     "black","red","green","yellow","blue","magenta","cyan","white","bright_black","bright_red","bright_green","bright_yellow","bright_blue","bright_magenta",
@@ -67,14 +60,14 @@ class LiveDownload():
             TransferSpeedColumn(),
             console=self.console
         )
-        self.filesprocessed = Progress(
+        self.filesmgr = Progress(
             SpinnerColumn(),
             *Progress.get_default_columns(),
             TimeElapsedColumn(),
             MofNCompleteColumn(),
             console=self.console
         )
-        self.bytestransferred = Progress(
+        self.bytesmgr = Progress(
             SpinnerColumn(),
             *Progress.get_default_columns(),
             DownloadColumn(binary_units=True),
@@ -83,8 +76,8 @@ class LiveDownload():
         )
 
         self.group = Group (
-            self.filesprocessed,
-            self.bytestransferred,
+            self.filesmgr,
+            self.bytesmgr,
             self.worker,
         )
         self.live = Live(self.group, console=self.console, refresh_per_second=10)
@@ -95,40 +88,28 @@ class LiveDownload():
 
     def start(self, totalfiles, totalbytes):
         self.totalbytes = totalbytes #keep track of total bytes here for `advance_bytestotal``
-        self.files = self.filesprocessed.add_task("[blue]FILES", total=totalfiles)
-        self.bytes = self.bytestransferred.add_task("[blue]FSIZE", total=totalbytes)
+        self.files = self.filesmgr.add_task("[hot_pink]FILES", total=totalfiles)
+        self.bytes = self.bytesmgr.add_task("[blue]FSIZE", total=totalbytes)
         self.live.__enter__()
         return (self.files, self.bytes)
     
     def finish(self, *args, **kwargs):
-        self.filesprocessed.remove_task(self.files)
-        self.bytestransferred.remove_task(self.bytes)
+        self.filesmgr.remove_task(self.files)
+        self.bytesmgr.remove_task(self.bytes)
         self.live.stop()
-
-    def __enter__(self):
-        self.start(1000,1000)
-        return self
-
-    def __exit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType]
-    ):
-        self.finish()
 
     def advance_files(self, advance=1):
         with self._lock:
-            self.filesprocessed.update(self.files, advance=advance)
+            self.filesmgr.update(self.files, advance=advance)
 
     def advance_bytes(self, advance):
         with self._lock:
-            self.bytestransferred.update(self.bytes, advance=advance)
+            self.bytesmgr.update(self.bytes, advance=advance)
     
     def advance_bytestotal(self, advance):
         self.totalbytes += advance
         with self._lock:
-            self.bytestransferred.update(self.bytes, total = self.totalbytes)
+            self.bytesmgr.update(self.bytes, total = self.totalbytes)
 
     def update(self, task_id, *args, **kwargs):
         self.worker.update(task_id=task_id, *args, **kwargs)
@@ -141,7 +122,7 @@ class LiveDownload():
     
 from uuid import uuid4
 
-class Downloader():
+class Dummy():
 
     def __init__(self):
         self.console = Console()
@@ -153,19 +134,19 @@ class Downloader():
     def dummy(self,time):
         ID = str(uuid4())
         
-        task_view = self.live.add_task(description=f"{ID}", total = time)
+        worker_id = self.live.add_task(description=f"{ID}", total = time)
         for _ in range(time):
             sleeptime = randint(1,100)
             self.log(f"[+] {ID} checking in!")
             sleep(sleeptime/100)
-            self.live.update(task_id=task_view, advance=1)
+            self.live.update(task_id=worker_id, advance=1)
         
-        self.live.remove_task(task_id=task_view)
+        self.live.remove_task(task_id=worker_id)
         
 
 if __name__=="__main__":
     con = Console()
-    d = Downloader()
+    d = Dummy()
 
     #with LiveDownload(console=con) as live:
         #d.dummy(1000)
